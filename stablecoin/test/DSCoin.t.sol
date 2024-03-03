@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.18;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {DSCoin} from "../src/DSCoin.sol";
@@ -28,17 +28,13 @@ contract DSCoinTest is StdCheats, Test {
 
     function test_ShouldFailWhenMintingZero() public {
         vm.prank(dsc.owner());
-        vm.expectRevert(
-            TestUtilities.withError("DSCoin__AmountMustBePositive()")
-        );
+        vm.expectRevert(TestUtilities.withError("DSCoin__AmountMustBePositive()"));
         dsc.mint(address(this), 0);
     }
 
     function test_ShouldFailWhenMintingToZeroAddress() public {
         vm.prank(dsc.owner());
-        vm.expectRevert(
-            TestUtilities.withError("DSCoin__CantMintToZeroAddress()")
-        );
+        vm.expectRevert(TestUtilities.withError("DSCoin__CantMintToZeroAddress()"));
         dsc.mint(address(0), 100);
     }
 
@@ -57,18 +53,14 @@ contract DSCoinTest is StdCheats, Test {
 
     function test_ShouldFailWhenBurningZeroOrLess() public {
         vm.prank(dsc.owner());
-        vm.expectRevert(
-            TestUtilities.withError("DSCoin__AmountMustBePositive()")
-        );
+        vm.expectRevert(TestUtilities.withError("DSCoin__AmountMustBePositive()"));
         dsc.burn(0);
     }
 
     function test_ShouldFailWhenBurningMoreThanBalance() public {
         vm.prank(dsc.owner());
         dsc.mint(address(this), 100);
-        vm.expectRevert(
-            TestUtilities.withError("DSCoin__BurnAmountExceedsBalance()")
-        );
+        vm.expectRevert(TestUtilities.withError("DSCoin__BurnAmountExceedsBalance()"));
         dsc.burn(101);
     }
 }
