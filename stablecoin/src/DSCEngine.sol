@@ -40,7 +40,7 @@ contract DSCEngine is ReentrancyGuard {
     /////////////////////////
     // Immutable variables //
     /////////////////////////
-    uint8 private constant LIQUIDATION_THRESHOLD = 150;
+    uint8 private constant LIQUIDATION_THRESHOLD = 50; // 50% so 2x overcollateralized
     uint8 private constant LIQUIDATION_PRECISION = 100;
     uint private constant MININUM_HEALTH_FACTOR = 1e18;
     uint private constant ADDITIONAL_FEED_PRECISION = 1e10;
@@ -215,6 +215,10 @@ contract DSCEngine is ReentrancyGuard {
     ///////////////////////////
     function getStablecoin() public view returns (address) {
         return address(i_dsc);
+    }
+
+    function getHealthFactor(address _user) public view returns (uint256) {
+        return _healthFactor(_user);
     }
 
     /**

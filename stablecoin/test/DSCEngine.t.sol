@@ -40,9 +40,6 @@ contract DSCEngineTest is StdCheats, Test {
         wETHMock.mint(alice, aHundredEther);
     }
 
-    // people can deposit collateral and mint dsc
-    // people can redeem collateral for dsc
-    // people can burn dsc to get back collateral
     // people can liquidate other people's collateral if it falls below a certain ratio
     // health retrieves how healthy the people's collateral is
 
@@ -143,31 +140,32 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 0);
         vm.stopPrank();
     }
+
     function test_AllowsUsersToRedeeemCollateralIfTheHealthFactorIsHealthyEnough() public {
         // Arrange
         vm.startPrank(alice);
-        wETHMock.approve(address(engine), 2 ether);
-        engine.depositCollateral(wETHaddress, 2 ether);
+        wETHMock.approve(address(engine), 2.5 ether);
+        engine.depositCollateral(wETHaddress, 2.5 ether);
         wETHPriceFeed.updateRoundData(1);
-        engine.mintDSC(1.5 ether);
+        engine.mintDSC(1 ether);
 
         // Act
         engine.redeemCollateral(wETHaddress, 0.5 ether);
 
         // // Assert
-        assertEq(engine.getCollateral(alice, wETHaddress), 1.5 ether);
-        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 1.5 ether);
+        assertEq(engine.getCollateral(alice, wETHaddress), 2 ether);
+        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 1 ether);
         vm.stopPrank();
     }
 
     function test_RevertsWhenUsersRedeemCollateralIfTheHealthFactorIsNotHealthyEnough() public {
         // Arrange
-        uint expectedHealthFactor = 0.75 ether;
+        uint expectedHealthFactor = 0.5 ether;
         vm.startPrank(alice);
         wETHMock.approve(address(engine), 1 ether);
         engine.depositCollateral(wETHaddress, 1 ether);
         wETHPriceFeed.updateRoundData(1);
-        engine.mintDSC(1 ether);
+        engine.mintDSC(0.5 ether);
 
         // Act
         vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, expectedHealthFactor));
@@ -175,4 +173,21 @@ contract DSCEngineTest is StdCheats, Test {
 
         vm.stopPrank();
     }
+
+    function test_AllowUsersToViewTheirHealthFactor() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wETHaddress, 2 ether);
+        wETHPriceFeed.updateRoundData(1);
+        engine.mintDSC(1 ether);
+
+        // Act
+        uint healthFactor = engine.getHealthFactor(alice);
+
+        // Assert
+        assertEq(healthFactor, 1 ether);
+        vm.stopPrank();
+    }
+
 }
