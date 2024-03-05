@@ -9,7 +9,7 @@ import {ERC20Mock} from "@openzeppelin/mocks/token/ERC20Mock.sol";
 import {AggregatorV3Mock} from "./mocks/AggregatorV3Mock.t.sol";
 
 contract DSCEngineTest is StdCheats, Test {
-    event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
+    event CollateralDeposited(address indexed user, address indexed token, uint amount);
 
     DSCEngine engine;
     ERC20Mock wETHMock = new ERC20Mock();
@@ -25,6 +25,7 @@ contract DSCEngineTest is StdCheats, Test {
     bool shouldVerifySecondIndexedParameter = true;
     bool shouldVerifyThirdIndexedParameter = true;
     bool shouldVerifyData = true;
+    uint aHundredEther = 100 ether;
 
     function setUp() public {
         address[] memory collateralTokens = new address[](2);
@@ -35,7 +36,7 @@ contract DSCEngineTest is StdCheats, Test {
         priceFeeds[1] = address(wBTCPriceFeed);
         engine = new DSCEngine(collateralTokens, priceFeeds);
 
-        wETHMock.mint(alice, 100 ether);
+        wETHMock.mint(alice, aHundredEther);
     }
 
     // people can deposit collateral and mint dsc
@@ -47,86 +48,80 @@ contract DSCEngineTest is StdCheats, Test {
     function test_AllowsDepositingCollateral() public {
         // Arrange
         vm.startPrank(alice);
-        uint256 amount = 100;
-        wETHMock.approve(address(engine), amount);
-
-        // Act
+        wETHMock.approve(address(engine), aHundredEther);
         vm.expectEmit(
             shouldVerifyFirstIndexedParameter,
             shouldVerifySecondIndexedParameter,
             shouldVerifyThirdIndexedParameter,
             !shouldVerifyData
         );
-        // The event we expect
-        emit CollateralDeposited(alice, wETHaddress, 100);
 
-        engine.depositCollateral(wETHaddress, amount);
-        vm.stopPrank();
+        // Act
+        emit CollateralDeposited(alice, wETHaddress, 100); // this is the event we expect to be emitted in the next line
+        engine.depositCollateral(wETHaddress, aHundredEther);
 
         // Assert
-        assertEq(engine.getCollateral(alice, wETHaddress), amount);
+        vm.stopPrank();
+        assertEq(engine.getCollateral(alice, wETHaddress), aHundredEther);
     }
 
     function test_RevertsWhen_DepositingWithoutAllowance() public {
-        vm.startPrank(alice);
-        uint256 amount = 100;
+        vm.prank(alice);
+
         vm.expectRevert();
-        engine.depositCollateral(wETHaddress, amount);
-        vm.stopPrank();
+        engine.depositCollateral(wETHaddress, 100);
     }
 
     function test_RevertsWhen_DepositingZeroCollateral() public {
-        vm.startPrank(alice);
-        uint256 amount = 0;
-        wETHMock.approve(address(engine), amount);
+        vm.prank(alice);
+
         vm.expectRevert(DSCEngine.DSCEngine__AmountMustBePositive.selector);
-        engine.depositCollateral(wETHaddress, amount);
-        vm.stopPrank();
+        engine.depositCollateral(wETHaddress, 0);
     }
 
     function test_RevertsWhen_DepositingInvalidToken() public {
         vm.startPrank(alice);
-        uint256 amount = 100;
-        wETHMock.approve(address(engine), amount);
+
         vm.expectRevert(DSCEngine.DSCEngine__TokenAddressMustBeValid.selector);
-        engine.depositCollateral(makeAddr("invalid"), amount);
-        vm.stopPrank();
-    }
+        engine.depositCollateral(makeAddr("invalid"), 100);
 
-    function test_AllowUsersToMintDSCTokensWhenCollateralizedEnough() public {
-        // Arrange
-        vm.startPrank(alice);
-        uint256 amount = 100 ether;
-        wETHMock.approve(address(engine), amount);
-        engine.depositCollateral(wETHaddress, amount);
         vm.stopPrank();
-
-        // Act
-        vm.startPrank(alice);
-        wETHPriceFeed.updateRoundData(100);
-        uint256 dscAmount = 100;
-        engine.mintDSC(dscAmount);
-        vm.stopPrank();
-
-        // Assert
-        assertEq(engine.getCollateral(alice, wETHaddress), amount);
-        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), dscAmount);
     }
 
     function test_RevertsWhen_MintingZeroDSC() public {
         vm.startPrank(alice);
-        uint256 dscAmount = 0;
+        
         vm.expectRevert(DSCEngine.DSCEngine__AmountMustBePositive.selector);
+        engine.mintDSC(0);
+
+        vm.stopPrank();
+    }
+
+    function test_AllowUsersToMintDSCTokensWithEnoughCollateral() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), aHundredEther);
+        engine.depositCollateral(wETHaddress, aHundredEther);
+
+        // Act
+        wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
+        uint dscAmount = 1 ether;
         engine.mintDSC(dscAmount);
+
+        // Assert
+        assertEq(engine.getCollateral(alice, wETHaddress), aHundredEther);
+        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), dscAmount);
         vm.stopPrank();
     }
 
     function test_RevertsWhenUsersMintDSCWithoutEnoughCollateral() public {
+        // Arrange
         vm.startPrank(alice);
-        wETHPriceFeed.updateRoundData(100);
-        uint256 dscAmount = 100;
+        wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
+        
         vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, 0));
-        engine.mintDSC(dscAmount);
+        engine.mintDSC(1 ether);
+
         vm.stopPrank();
     }
 }
