@@ -12,7 +12,7 @@ import {ERC20Mock} from "@openzeppelin/mocks/token/ERC20Mock.sol";
 contract DSCEngineTest is StdCheats, Test {
     event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
 
-    DSCEngine dsc;
+    DSCEngine engine;
     ERC20Mock wETHMock = new ERC20Mock();
     ERC20Mock wBTCMock = new ERC20Mock();
     address wETHaddress = address(wETHMock);
@@ -31,7 +31,7 @@ contract DSCEngineTest is StdCheats, Test {
         collateralTokens[1] = wBTCaddress;
         dsc = new DSCEngine(collateralTokens);
 
-        wETHMock.mint(alice, 100);
+        wETHMock.mint(alice, 100 ether);
     }
 
     // people can deposit collateral and mint dsc
@@ -44,7 +44,7 @@ contract DSCEngineTest is StdCheats, Test {
         // Arrange
         vm.startPrank(alice);
         uint256 amount = 100;
-        wETHMock.approve(address(dsc), amount);
+        wETHMock.approve(address(engine), amount);
 
         // Act
         vm.expectEmit(
@@ -56,36 +56,38 @@ contract DSCEngineTest is StdCheats, Test {
         // The event we expect
         emit CollateralDeposited(alice, wETHaddress, 100);
 
-        dsc.depositCollateral(wETHaddress, amount);
+        engine.depositCollateral(wETHaddress, amount);
         vm.stopPrank();
 
         // Assert
-        assertEq(dsc.getCollateral(alice, wETHaddress), amount);
+        assertEq(engine.getCollateral(alice, wETHaddress), amount);
     }
 
     function test_RevertsWhen_DepositingWithoutAllowance() public {
         vm.startPrank(alice);
         uint256 amount = 100;
         vm.expectRevert();
-        dsc.depositCollateral(wETHaddress, amount);
+        engine.depositCollateral(wETHaddress, amount);
         vm.stopPrank();
     }
 
     function test_RevertsWhen_DepositingZeroCollateral() public {
         vm.startPrank(alice);
         uint256 amount = 0;
-        wETHMock.approve(address(dsc), amount);
-        vm.expectRevert(TestUtilities.withError("DSCEngine__AmountMustBePositive()"));
-        dsc.depositCollateral(wETHaddress, amount);
+        wETHMock.approve(address(engine), amount);
+        vm.expectRevert(DSCEngine.DSCEngine__AmountMustBePositive.selector);
+        engine.depositCollateral(wETHaddress, amount);
         vm.stopPrank();
     }
 
     function test_RevertsWhen_DepositingInvalidToken() public {
         vm.startPrank(alice);
         uint256 amount = 100;
-        wETHMock.approve(address(dsc), amount);
-        vm.expectRevert(TestUtilities.withError("DSCEngine__TokenAddressMustBeValid()"));
-        dsc.depositCollateral(makeAddr("invalid"), amount);
+        wETHMock.approve(address(engine), amount);
+        vm.expectRevert(DSCEngine.DSCEngine__TokenAddressMustBeValid.selector);
+        engine.depositCollateral(makeAddr("invalid"), amount);
+        vm.stopPrank();
+    }
         vm.stopPrank();
     }
 }
