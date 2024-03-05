@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {DSCoin} from "./DSCoin.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
+import {console2} from "forge-std/Test.sol";
 
 /**
  * @title DSCEngine
@@ -24,6 +26,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
  * for minting and redeeming DSC, as well as depositing and withdrawing collateral.
  * @notice This contract is based on the MakerDAO DSS system
  */
+
 contract DSCEngine is ReentrancyGuard {
     ////////////////
     // Errors     //
@@ -31,11 +34,17 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__AmountMustBePositive();
     error DSCEngine__TokenAddressMustBeValid();
     error DSCEngine__TransferFailed();
-    error DSCEngine__InsufficientCollateral();
+    error DSCEngine__InsufficientCollateral(uint256 healthFactor);
+    error DSCEngine__MintingFailed();
 
     /////////////////////////
     // Immutable variables //
     /////////////////////////
+    uint8 private constant LIQUIDATION_THRESHOLD = 150;
+    uint8 private constant LIQUIDATION_PRECISION = 100;
+    uint8 private constant MININUM_HEALTH_FACTOR = 1;
+    uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
+    uint256 private constant PRECISION = 1e18;
     address private immutable i_wETH;
     address private immutable i_wBTC;
     address private immutable i_wETHPriceFeed;
@@ -107,14 +116,99 @@ contract DSCEngine is ReentrancyGuard {
         emit CollateralDeposited(msg.sender, _token, _amount);
     }
 
-    // create a public view function that queries s_usersCollateral
+    /**
+     * @dev Mints DSC tokens for the caller.
+     * @param _amount The amount of DSC tokens to mint.
+     * @notice Follows Checks-Effects-Interactions pattern.
+     * @notice The `_amount` must be a positive value.
+     * @notice Reverts with `DSCEngine__AmountMustBePositive` if `_amount` is less than or equal to zero.
+     * @notice Reverts with `DSCEngine__InsufficientCollateral` if the caller does not have enough collateral to mint the `_amount` of DSC tokens.
+     */
+    function mintDSC(uint256 _amount) external positiveAmount(_amount) nonReentrant {
+        s_usersDSC[msg.sender] += _amount;
+        _revertIfInsufficientCollateral(msg.sender);
+        bool minted = i_dsc.mint(msg.sender, _amount);
+        if (!minted) {
+            revert DSCEngine__MintingFailed();
+        }
+    }
+
     function getCollateral(address _user, address _token) public view returns (uint256) {
         return s_usersCollateral[_user][_token];
     }
+
+    //////////////////////////////////////////
+    // Private and Internal view functions  //
+    //////////////////////////////////////////
+
+    /**
+     * @dev Checks the health factor of the user to determine if they have enough collateral.
+     * If the health factor is below the required threshold, the function will revert.
+     */
+    function _revertIfInsufficientCollateral(address _user) private view {
+        uint256 usersHealthFactor = _healthFactor(_user);
+        if (usersHealthFactor < MININUM_HEALTH_FACTOR) {
+            revert DSCEngine__InsufficientCollateral(usersHealthFactor);
+        }
+    }
+
+    /**
+     * @dev Returns how close the liquidation is for a user.
+     * If the users goes below a certain health factor, they can be liquidated.
+     * @param _user The address of the user.
+     * @return The health factor of the user.
+     */
+    function _healthFactor(address _user) private view returns (uint256) {
+        (uint256 totalDscMinted, uint256 totalUsdCollateral) = _getAccountInformation(_user);
+        if (totalDscMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustmentForThreshold = (totalUsdCollateral * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+
+        return (collateralAdjustmentForThreshold * PRECISION) / totalDscMinted;
+    }
+
+    function _getAccountInformation(address _user) private view returns (uint256, uint256) {
+        uint256 totalUsdMinted = s_usersDSC[_user];
+        uint256 totalUsdCollateral = getCollateralUSDValue(_user);
+        return (totalUsdMinted, totalUsdCollateral);
+    }
+
     ////////////////////////////
     // Public view functions //
     ///////////////////////////
     function getStablecoin() public view returns (address) {
         return address(i_dsc);
+    }
+
+    /**
+     * @dev Retrieves the total USD value of the collateral held by a specific user.
+     * @param user The address of the user.
+     * @return The total USD value of the user's collateral.
+     */
+    function getCollateralUSDValue(address user) public view returns (uint256) {
+        uint256 wETHamount = s_usersCollateral[user][i_wETH];
+        uint256 wBTCamount = s_usersCollateral[user][i_wBTC];
+        uint256 wETHValue = getUSDValue(i_wETHPriceFeed, wETHamount);
+        uint256 wBTCValue = getUSDValue(i_wBTCPriceFeed, wBTCamount);
+
+        return wETHValue + wBTCValue;
+    }
+
+    /**
+     * @dev Returns the USD value of a given token amount.
+     * @param _priceFeedAddress The address of the Chainlink price feed.
+     * @param _amount The amount of tokens.
+     * @return The USD value of the token amount.
+     */
+    function getUSDValue(address _priceFeedAddress, uint256 _amount) public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(_priceFeedAddress);
+        (, int256 price,,,) = priceFeed.latestRoundData();
+
+        if (_amount == 0 || price == 0) {
+            return 0;
+        }
+
+        uint256 priceWithPrecision = uint256(price) * ADDITIONAL_FEED_PRECISION;
+        uint256 usdValue = (priceWithPrecision * _amount) / PRECISION;
+        return usdValue;
     }
 }
