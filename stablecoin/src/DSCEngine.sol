@@ -42,9 +42,9 @@ contract DSCEngine is ReentrancyGuard {
     /////////////////////////
     uint8 private constant LIQUIDATION_THRESHOLD = 150;
     uint8 private constant LIQUIDATION_PRECISION = 100;
-    uint8 private constant MININUM_HEALTH_FACTOR = 1;
-    uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
-    uint256 private constant PRECISION = 1e18;
+    uint private constant MININUM_HEALTH_FACTOR = 1e18;
+    uint private constant ADDITIONAL_FEED_PRECISION = 1e10;
+    uint private constant PRECISION = 1e18;
     address private immutable i_wETH;
     address private immutable i_wBTC;
     address private immutable i_wETHPriceFeed;
@@ -61,6 +61,7 @@ contract DSCEngine is ReentrancyGuard {
     // Events     //
     ////////////////
     event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
+    event CollateralRedeemed(address indexed user, address indexed token, uint256 amount);
 
     constructor(address[] memory _collateralTokens, address[] memory _priceFeeds) {
         i_dsc = new DSCoin();
@@ -99,6 +100,11 @@ contract DSCEngine is ReentrancyGuard {
     function depositCollateralAndMintDsc(address _token, uint256 _amount) external {
         depositCollateral(_token, _amount);
         mintDSC(_amount);
+    }
+
+    function redeemCollateralAndBurnDsc(address _token, uint256 _amount) external {
+        burnDSC(_amount);
+        redeemCollateral(_token, _amount);
     }
 
     /**
@@ -154,6 +160,16 @@ contract DSCEngine is ReentrancyGuard {
         i_dsc.burn(_amount);
     }
 
+    function redeemCollateral(address _collateral, uint _amount) public {
+        s_usersCollateral[msg.sender][_collateral] -= _amount;
+        bool s = IERC20(_collateral).transfer(msg.sender, _amount);
+        if (!s) {
+            revert DSCEngine__TransferFailed();
+        }
+        _revertIfInsufficientCollateral(msg.sender);
+        emit CollateralRedeemed(msg.sender, _collateral, _amount);
+    }
+
     function getCollateral(address _user, address _token) public view returns (uint256) {
         return s_usersCollateral[_user][_token];
     }
@@ -168,6 +184,7 @@ contract DSCEngine is ReentrancyGuard {
      */
     function _revertIfInsufficientCollateral(address _user) private view {
         uint256 usersHealthFactor = _healthFactor(_user);
+        console2.log("usersHealthFactor: ", usersHealthFactor);
         if (usersHealthFactor < MININUM_HEALTH_FACTOR) {
             revert DSCEngine__InsufficientCollateral(usersHealthFactor);
         }

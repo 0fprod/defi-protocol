@@ -143,4 +143,36 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 0);
         vm.stopPrank();
     }
+    function test_AllowsUsersToRedeeemCollateralIfTheHealthFactorIsHealthyEnough() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wETHaddress, 2 ether);
+        wETHPriceFeed.updateRoundData(1);
+        engine.mintDSC(1.5 ether);
+
+        // Act
+        engine.redeemCollateral(wETHaddress, 0.5 ether);
+
+        // // Assert
+        assertEq(engine.getCollateral(alice, wETHaddress), 1.5 ether);
+        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 1.5 ether);
+        vm.stopPrank();
+    }
+
+    function test_RevertsWhenUsersRedeemCollateralIfTheHealthFactorIsNotHealthyEnough() public {
+        // Arrange
+        uint expectedHealthFactor = 0.75 ether;
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 1 ether);
+        engine.depositCollateral(wETHaddress, 1 ether);
+        wETHPriceFeed.updateRoundData(1);
+        engine.mintDSC(1 ether);
+
+        // Act
+        vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, expectedHealthFactor));
+        engine.redeemCollateral(wETHaddress, 0.5 ether);
+
+        vm.stopPrank();
+    }
 }
