@@ -92,6 +92,16 @@ contract DSCEngine is ReentrancyGuard {
     //////////////////////////////////////////
 
     /**
+     * @dev Deposits collateral and mints DSC tokens in one tx.
+     * @param _token The address of the collateral token.
+     * @param _amount The amount of collateral to deposit and mint DSC tokens.
+     */
+    function depositCollateralAndMintDsc(address _token, uint256 _amount) external {
+        depositCollateral(_token, _amount);
+        mintDSC(_amount);
+    }
+
+    /**
      * @dev Deposits collateral tokens into the contract.
      * @param _token The address of the collateral token.
      * @param _amount The amount of collateral tokens to deposit.
@@ -102,7 +112,7 @@ contract DSCEngine is ReentrancyGuard {
      * @notice Reverts with `DSCEngine__DepositFailed` if the transfer of collateral tokens fails.
      */
     function depositCollateral(address _token, uint256 _amount)
-        external
+        public
         validToken(_token)
         positiveAmount(_amount)
         nonReentrant
@@ -124,13 +134,24 @@ contract DSCEngine is ReentrancyGuard {
      * @notice Reverts with `DSCEngine__AmountMustBePositive` if `_amount` is less than or equal to zero.
      * @notice Reverts with `DSCEngine__InsufficientCollateral` if the caller does not have enough collateral to mint the `_amount` of DSC tokens.
      */
-    function mintDSC(uint256 _amount) external positiveAmount(_amount) nonReentrant {
+    function mintDSC(uint256 _amount) public positiveAmount(_amount) nonReentrant {
         s_usersDSC[msg.sender] += _amount;
         _revertIfInsufficientCollateral(msg.sender);
         bool minted = i_dsc.mint(msg.sender, _amount);
         if (!minted) {
             revert DSCEngine__MintingFailed();
         }
+    }
+
+    function burnDSC(uint256 _amount) public positiveAmount(_amount) nonReentrant {
+        s_usersDSC[msg.sender] -= _amount;
+        // Transfer sender's DSC to the contract
+        bool s = i_dsc.transferFrom(msg.sender, address(this), _amount);
+        console2.log("s: ", s);
+        if (!s) {
+            revert DSCEngine__TransferFailed();
+        }
+        i_dsc.burn(_amount);
     }
 
     function getCollateral(address _user, address _token) public view returns (uint256) {

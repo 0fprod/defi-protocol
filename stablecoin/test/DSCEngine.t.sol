@@ -7,6 +7,7 @@ import {DSCEngine} from "../src/DSCEngine.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {ERC20Mock} from "@openzeppelin/mocks/token/ERC20Mock.sol";
 import {AggregatorV3Mock} from "./mocks/AggregatorV3Mock.t.sol";
+import {DSCoin} from "../src/DSCoin.sol";
 
 contract DSCEngineTest is StdCheats, Test {
     event CollateralDeposited(address indexed user, address indexed token, uint amount);
@@ -122,6 +123,24 @@ contract DSCEngineTest is StdCheats, Test {
         vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, 0));
         engine.mintDSC(1 ether);
 
+        vm.stopPrank();
+    }
+
+    function test_AllowsUsersBurnDSC() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), aHundredEther);
+        engine.depositCollateral(wETHaddress, aHundredEther);
+        wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
+        engine.mintDSC(1 ether);
+
+        // Act
+        DSCoin(engine.getStablecoin()).approve(address(engine), 1 ether);
+        engine.burnDSC(1 ether);
+
+        // Assert
+        assertEq(engine.getCollateral(alice, wETHaddress), aHundredEther);
+        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 0);
         vm.stopPrank();
     }
 }
