@@ -5,7 +5,7 @@ import {DSCoin} from "./DSCoin.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
-import {console2} from "forge-std/Test.sol";
+import {console, console2} from "forge-std/Test.sol";
 
 /**
  * @title DSCEngine
@@ -43,7 +43,7 @@ contract DSCEngine is ReentrancyGuard {
     uint8 private constant LIQUIDATION_THRESHOLD = 50; // 50% so 2x overcollateralized
     uint8 private constant LIQUIDATION_PRECISION = 100;
     uint private constant MININUM_HEALTH_FACTOR = 1e18;
-    uint private constant ADDITIONAL_FEED_PRECISION = 1e10;
+    uint private constant ADDITIONAL_FEED_PRECISION = 1e10; // This is to adjust all the priced to 18 decimals (in terms of wei). Most of the price feeds aginst USD have 8 decimals.
     uint private constant PRECISION = 1e18;
     address private immutable i_wETH;
     address private immutable i_wBTC;
@@ -151,9 +151,7 @@ contract DSCEngine is ReentrancyGuard {
 
     function burnDSC(uint256 _amount) public positiveAmount(_amount) nonReentrant {
         s_usersDSC[msg.sender] -= _amount;
-        // Transfer sender's DSC to the contract
         bool s = i_dsc.transferFrom(msg.sender, address(this), _amount);
-        console2.log("s: ", s);
         if (!s) {
             revert DSCEngine__TransferFailed();
         }
@@ -170,13 +168,26 @@ contract DSCEngine is ReentrancyGuard {
         emit CollateralRedeemed(msg.sender, _collateral, _amount);
     }
 
-    function getCollateral(address _user, address _token) public view returns (uint256) {
-        return s_usersCollateral[_user][_token];
-    }
+    function liquidate(address _insolvetUser, address _collateralAddress, uint _dscToBurn) public {
+        uint insolvetsUsersCollateral = s_usersCollateral[_insolvetUser][_collateralAddress];
 
+        if (_isLiquidatable(_insolvetUser)) {
+            s_usersCollateral[_insolvetUser][_collateralAddress] = 0;
+            s_usersCollateral[msg.sender][_collateralAddress] += insolvetsUsersCollateral;
+            bool s = IERC20(_collateralAddress).transfer(msg.sender, insolvetsUsersCollateral);
+            
+            if (!s) {
+                revert DSCEngine__TransferFailed();
+            }
+            burnDSC(_dscToBurn);
+        }
+    }
     //////////////////////////////////////////
     // Private and Internal view functions  //
     //////////////////////////////////////////
+    function _isLiquidatable(address _user) private view returns (bool) {
+        return _healthFactor(_user) < MININUM_HEALTH_FACTOR;
+    }
 
     /**
      * @dev Checks the health factor of the user to determine if they have enough collateral.
@@ -184,7 +195,6 @@ contract DSCEngine is ReentrancyGuard {
      */
     function _revertIfInsufficientCollateral(address _user) private view {
         uint256 usersHealthFactor = _healthFactor(_user);
-        console2.log("usersHealthFactor: ", usersHealthFactor);
         if (usersHealthFactor < MININUM_HEALTH_FACTOR) {
             revert DSCEngine__InsufficientCollateral(usersHealthFactor);
         }
@@ -197,22 +207,26 @@ contract DSCEngine is ReentrancyGuard {
      * @return The health factor of the user.
      */
     function _healthFactor(address _user) private view returns (uint256) {
-        (uint256 totalDscMinted, uint256 totalUsdCollateral) = _getAccountInformation(_user);
+        (uint256 totalDscMinted, uint256 totalCollateralInUsd) = _getAccountInformation(_user);
         if (totalDscMinted == 0) return type(uint256).max;
-        uint256 collateralAdjustmentForThreshold = (totalUsdCollateral * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        uint256 collateralAdjustmentForThreshold = (totalCollateralInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
 
         return (collateralAdjustmentForThreshold * PRECISION) / totalDscMinted;
     }
 
     function _getAccountInformation(address _user) private view returns (uint256, uint256) {
         uint256 totalUsdMinted = s_usersDSC[_user];
-        uint256 totalUsdCollateral = getCollateralUSDValue(_user);
-        return (totalUsdMinted, totalUsdCollateral);
+        uint256 totalCollateralInUsd = getCollateralUSDValue(_user);
+        return (totalUsdMinted, totalCollateralInUsd);
     }
 
     ////////////////////////////
     // Public view functions //
     ///////////////////////////
+    function getCollateral(address _user, address _token) public view returns (uint256) {
+        return s_usersCollateral[_user][_token];
+    }
+
     function getStablecoin() public view returns (address) {
         return address(i_dsc);
     }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {Test, console2} from "forge-std/Test.sol";
+import {Test, console2, console} from "forge-std/Test.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {DSCEngine} from "../src/DSCEngine.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
@@ -27,6 +27,7 @@ contract DSCEngineTest is StdCheats, Test {
     bool shouldVerifyThirdIndexedParameter = true;
     bool shouldVerifyData = true;
     uint aHundredEther = 100 ether;
+    uint constant PRICE_FEED_DECIMALS = 10e8;
 
     function setUp() public {
         address[] memory collateralTokens = new address[](2);
@@ -38,10 +39,8 @@ contract DSCEngineTest is StdCheats, Test {
         engine = new DSCEngine(collateralTokens, priceFeeds);
 
         wETHMock.mint(alice, aHundredEther);
+        wBTCMock.mint(bob, aHundredEther);
     }
-
-    // people can liquidate other people's collateral if it falls below a certain ratio
-    // health retrieves how healthy the people's collateral is
 
     function test_AllowsDepositingCollateral() public {
         // Arrange
@@ -112,7 +111,7 @@ contract DSCEngineTest is StdCheats, Test {
         vm.stopPrank();
     }
 
-    function test_RevertsWhenUsersMintDSCWithoutEnoughCollateral() public {
+    function test_RevertsWhen_UsersMintDSCWithoutEnoughCollateral() public {
         // Arrange
         vm.startPrank(alice);
         wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
@@ -158,7 +157,7 @@ contract DSCEngineTest is StdCheats, Test {
         vm.stopPrank();
     }
 
-    function test_RevertsWhenUsersRedeemCollateralIfTheHealthFactorIsNotHealthyEnough() public {
+    function test_RevertsWhen_UsersRedeemCollateralIfTheHealthFactorIsNotHealthyEnough() public {
         // Arrange
         uint expectedHealthFactor = 0.5 ether;
         vm.startPrank(alice);
@@ -178,16 +177,57 @@ contract DSCEngineTest is StdCheats, Test {
         // Arrange
         vm.startPrank(alice);
         wETHMock.approve(address(engine), 2 ether);
-        engine.depositCollateral(wETHaddress, 2 ether);
         wETHPriceFeed.updateRoundData(1);
+        engine.depositCollateral(wETHaddress, 2 ether);
         engine.mintDSC(1 ether);
 
         // Act
-        uint healthFactor = engine.getHealthFactor(alice);
+        uint healthFactor = engine.getHealthFactor(alice); 
 
         // Assert
         assertEq(healthFactor, 1 ether);
         vm.stopPrank();
     }
 
+    // The protocol will reward users that liquidate other users when the health factor is below 1
+    // The liquidator will receive the collateral and burn the DSC tokens
+    // They can listen to the mint and burn events to know when to liquidate
+    
+
+    // Lets do an example
+    // Lets say that 100$ of WETH backs 50 DSC tokens. Which means that the price of DSC is 1$.
+    // So each DSC token is backed by 2$ of WETH (our 200% collateralization ratio)
+    // If the price of WETH falls to 1.5$ then the health factor will be 0.75
+    // Which means that the liquidator will receive 1.5$ of WETH and burn 1 DSC token
+
+    function test_AllowsBobToLiquidateAlice() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wETHaddress, 2 ether);
+        wETHPriceFeed.updateRoundData(5);
+        engine.mintDSC(5 ether);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        wBTCMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wBTCaddress, 2 ether);
+        wBTCPriceFeed.updateRoundData(10);
+        engine.mintDSC(10 ether);
+
+        // Act
+        uint bobDscToBurn = 1 ether;
+        wETHPriceFeed.updateRoundData(4);
+        DSCoin(engine.getStablecoin()).approve(address(engine), 1 ether);
+        engine.liquidate(alice, wETHaddress, bobDscToBurn);
+
+        // Assert
+        assertEq(engine.getCollateral(bob, wETHaddress), 2 ether);
+        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(bob), 9 ether);
+        assertEq(engine.getCollateral(alice, wETHaddress), 0);
+        assertEq(ERC20Mock(engine.getStablecoin()).balanceOf(alice), 5 ether);
+        vm.stopPrank();
+    }
+
+    
 }
