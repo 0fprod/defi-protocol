@@ -229,5 +229,27 @@ contract DSCEngineTest is StdCheats, Test {
         vm.stopPrank();
     }
 
+    function test_RevertsWhen_BobTriesToLiquidateHealthyUsers() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wETHaddress, 2 ether);
+        wETHPriceFeed.updateRoundData(5);
+        engine.mintDSC(5 ether);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        wBTCMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wBTCaddress, 2 ether);
+        wBTCPriceFeed.updateRoundData(10);
+        engine.mintDSC(10 ether);
+
+        // Act
+        vm.expectRevert(DSCEngine.DSCEngine__HealthFactorOk.selector);
+        engine.liquidate(alice, wETHaddress, 1 ether);
+
+        vm.stopPrank();
+    }
+
     
 }

@@ -36,6 +36,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
     error DSCEngine__InsufficientCollateral(uint256 healthFactor);
     error DSCEngine__MintingFailed();
+    error DSCEngine__HealthFactorOk();
 
     /////////////////////////
     // Immutable variables //
@@ -169,18 +170,19 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function liquidate(address _insolvetUser, address _collateralAddress, uint _dscToBurn) public {
-        uint insolvetsUsersCollateral = s_usersCollateral[_insolvetUser][_collateralAddress];
-
-        if (_isLiquidatable(_insolvetUser)) {
-            s_usersCollateral[_insolvetUser][_collateralAddress] = 0;
-            s_usersCollateral[msg.sender][_collateralAddress] += insolvetsUsersCollateral;
-            bool s = IERC20(_collateralAddress).transfer(msg.sender, insolvetsUsersCollateral);
-            
-            if (!s) {
-                revert DSCEngine__TransferFailed();
-            }
-            burnDSC(_dscToBurn);
+        if (!_isLiquidatable(_insolvetUser)) {
+            revert DSCEngine__HealthFactorOk();
         }
+
+        uint insolvetsUsersCollateral = s_usersCollateral[_insolvetUser][_collateralAddress];
+        s_usersCollateral[_insolvetUser][_collateralAddress] = 0;
+        s_usersCollateral[msg.sender][_collateralAddress] += insolvetsUsersCollateral;
+        bool s = IERC20(_collateralAddress).transfer(msg.sender, insolvetsUsersCollateral);
+        
+        if (!s) {
+            revert DSCEngine__TransferFailed();
+        }
+        burnDSC(_dscToBurn);
     }
     //////////////////////////////////////////
     // Private and Internal view functions  //
