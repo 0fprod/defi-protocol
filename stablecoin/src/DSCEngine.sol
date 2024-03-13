@@ -64,8 +64,8 @@ contract DSCEngine is ReentrancyGuard {
     event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
     event CollateralRedeemed(address indexed user, address indexed token, uint256 amount);
 
-    constructor(address[] memory _collateralTokens, address[] memory _priceFeeds) {
-        i_dsc = new DSCoin();
+    constructor(address[] memory _collateralTokens, address[] memory _priceFeeds, address _dsc) {
+        i_dsc = DSCoin(_dsc);
         i_wETH = _collateralTokens[0];
         i_wBTC = _collateralTokens[1];
         i_wETHPriceFeed = _priceFeeds[0];

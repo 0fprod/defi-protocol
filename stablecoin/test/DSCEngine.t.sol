@@ -12,6 +12,7 @@ import {DSCoin} from "../src/DSCoin.sol";
 contract DSCEngineTest is StdCheats, Test {
     event CollateralDeposited(address indexed user, address indexed token, uint amount);
 
+    DSCoin dsc;
     DSCEngine engine;
     ERC20Mock wETHMock = new ERC20Mock();
     ERC20Mock wBTCMock = new ERC20Mock();
@@ -33,10 +34,16 @@ contract DSCEngineTest is StdCheats, Test {
         address[] memory collateralTokens = new address[](2);
         collateralTokens[0] = wETHaddress;
         collateralTokens[1] = wBTCaddress;
+        
         address[] memory priceFeeds = new address[](2);
         priceFeeds[0] = address(wETHPriceFeed);
         priceFeeds[1] = address(wBTCPriceFeed);
-        engine = new DSCEngine(collateralTokens, priceFeeds);
+
+        dsc = new DSCoin(owner);
+        engine = new DSCEngine(collateralTokens, priceFeeds, address(dsc));
+
+        vm.prank(owner);
+        dsc.transferOwnership(address(engine));
 
         wETHMock.mint(alice, aHundredEther);
         wBTCMock.mint(bob, aHundredEther);
