@@ -92,9 +92,9 @@ contract DSCEngine is ReentrancyGuard {
         _;
     }
 
-    //////////////////////////////////////////
-    // Public and external functions        //
-    //////////////////////////////////////////
+    ///////////////////////////
+    // External functions    //
+    ///////////////////////////
 
     /**
      * @dev Deposits collateral and mints DSC tokens in one tx.
@@ -106,11 +106,19 @@ contract DSCEngine is ReentrancyGuard {
         mintDSC(_amount);
     }
 
+    /**
+     * @dev Redeems collateral and burns DSC tokens.
+     * @param _token The address of the collateral token.
+     * @param _amount The amount of DSC tokens to burn.
+     */
     function redeemCollateralAndBurnDsc(address _token, uint256 _amount) external {
         burnDSC(_amount);
         redeemCollateral(_token, _amount);
     }
 
+    ///////////////////////////
+    // Public functions     //
+    ///////////////////////////
     /**
      * @dev Deposits collateral tokens into the contract.
      * @param _token The address of the collateral token.
@@ -153,6 +161,13 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
+    /**
+     * @dev Burns a specified amount of DSC tokens from the caller's balance.
+     * @param _amount The amount of DSC tokens to burn.
+     * @notice This function is used to burn DSC tokens from the caller's balance. The caller must have sufficient DSC tokens in their balance to burn. The function transfers the specified amount of DSC tokens from the caller to the contract, and then burns them by calling the `burn` function of the `i_dsc` token contract.
+     * @notice This function is non-reentrant and requires a positive amount of DSC tokens to be burned.
+     * @notice If the transfer of DSC tokens from the caller to the contract fails, the function reverts with a `DSCEngine__TransferFailed` error.
+     */
     function burnDSC(uint256 _amount) public positiveAmount(_amount) nonReentrant {
         s_usersDSC[msg.sender] -= _amount;
         bool s = i_dsc.transferFrom(msg.sender, address(this), _amount);
@@ -162,6 +177,11 @@ contract DSCEngine is ReentrancyGuard {
         i_dsc.burn(_amount);
     }
 
+    /**
+     * @dev Allows a user to redeem a specified amount of collateral.
+     * @param _collateral The address of the collateral token.
+     * @param _amount The amount of collateral to redeem.
+     */
     function redeemCollateral(address _collateral, uint _amount) public {
         s_usersCollateral[msg.sender][_collateral] -= _amount;
         bool s = IERC20(_collateral).transfer(msg.sender, _amount);
@@ -172,6 +192,14 @@ contract DSCEngine is ReentrancyGuard {
         emit CollateralRedeemed(msg.sender, _collateral, _amount);
     }
 
+    /**
+     * @dev Liquidates the insolvent user by transferring their collateral to the caller and burning a specified amount of DSC tokens.
+     * @param _insolvetUser The address of the insolvent user.
+     * @param _collateralAddress The address of the collateral token.
+     * @param _dscToBurn The amount of DSC tokens to burn.
+     * @notice reverst with DSCEngine__HealthFactorOk if the insolvent user is not liquidatable.
+     * @notice reverst with DSCEngine__TransferFailed if the transfer of collateral tokens fails.
+     */
     function liquidate(address _insolvetUser, address _collateralAddress, uint _dscToBurn) public {
         if (!_isLiquidatable(_insolvetUser)) {
             revert DSCEngine__HealthFactorOk();
@@ -219,6 +247,12 @@ contract DSCEngine is ReentrancyGuard {
         return (collateralAdjustmentForThreshold * PRECISION) / totalDscMinted;
     }
 
+    /**
+     * @dev Retrieves the account information for a given user.
+     * @param _user The address of the user.
+     * @return totalUsdMinted The total amount of USD minted by the user.
+     * @return totalCollateralInUsd The total collateral value in USD for the user.
+     */
     function _getAccountInformation(address _user) private view returns (uint256, uint256) {
         uint256 totalUsdMinted = s_usersDSC[_user];
         uint256 totalCollateralInUsd = getCollateralUSDValue(_user);
@@ -273,6 +307,12 @@ contract DSCEngine is ReentrancyGuard {
         return usdValue;
     }
 
+    /**
+     * @dev Returns the maximum amount of DSC that can be minted by the caller.
+     * @param _token The address of the token used as collateral.
+     * @param _amount The amount of collateral token.
+     * @return The maximum amount of DSC that can be minted.
+     */
     function getMaxMintableDsc(address _token, uint256 _amount) public view returns (uint256) {
         uint256 currentCollateralInUsd = getCollateralUSDValue(msg.sender);
         uint256 collateralValueInUsd = getUSDValue(s_priceFeeds[_token], _amount);
