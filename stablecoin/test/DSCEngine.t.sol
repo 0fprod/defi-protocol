@@ -309,4 +309,36 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(maxMintableDsc, 0 ether);
         vm.stopPrank();
     }
+
+    function test_AllowUsersToDepositCollateralAndMintDsc() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        wETHPriceFeed.updateRoundData(1);
+
+        // Act
+        engine.depositCollateralAndMintDsc(wETHaddress, 2 ether, 1 ether);
+
+        // Assert
+        assertEq(engine.getCollateral(alice, wETHaddress), 2 ether);
+        assertEq(DSCoin(engine.getStablecoin()).balanceOf(alice), 1 ether);
+        vm.stopPrank();
+    }
+
+    function test_AllowUsersToRedeemCollateralAndBurnDsc() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        dsc.approve(address(engine), 1 ether);
+        wETHPriceFeed.updateRoundData(1);
+        engine.depositCollateralAndMintDsc(wETHaddress, 2 ether, 1 ether);
+
+        // Act
+        engine.redeemCollateralAndBurnDsc(wETHaddress, 1 ether, 0.5 ether);
+
+        // Assert
+        assertEq(engine.getCollateral(alice, wETHaddress), 1 ether);
+        assertEq(DSCoin(engine.getStablecoin()).balanceOf(alice), 0.5 ether);
+        vm.stopPrank();
+    }
 }

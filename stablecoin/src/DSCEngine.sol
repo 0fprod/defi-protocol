@@ -96,24 +96,27 @@ contract DSCEngine is ReentrancyGuard {
     // External functions    //
     ///////////////////////////
 
+    
     /**
-     * @dev Deposits collateral and mints DSC tokens in one tx.
+     * @dev Deposits collateral and mints DSC tokens.
      * @param _token The address of the collateral token.
-     * @param _amount The amount of collateral to deposit and mint DSC tokens.
+     * @param _collateralAmount The amount of collateral to deposit.
+     * @param _dscAmount The amount of DSC tokens to mint.
      */
-    function depositCollateralAndMintDsc(address _token, uint256 _amount) external {
-        depositCollateral(_token, _amount);
-        mintDSC(_amount);
+    function depositCollateralAndMintDsc(address _token, uint256 _collateralAmount, uint256 _dscAmount) external {
+        depositCollateral(_token, _collateralAmount);
+        mintDSC(_dscAmount);
     }
 
     /**
      * @dev Redeems collateral and burns DSC tokens.
      * @param _token The address of the collateral token.
-     * @param _amount The amount of DSC tokens to burn.
+     * @param _collateralAmount The amount of collateral tokens to redeem.
+     * @param _dscAmount The amount of DSC tokens to burn.
      */
-    function redeemCollateralAndBurnDsc(address _token, uint256 _amount) external {
-        burnDSC(_amount);
-        redeemCollateral(_token, _amount);
+    function redeemCollateralAndBurnDsc(address _token, uint256 _collateralAmount, uint256 _dscAmount) external {
+        burnDSC(_dscAmount);
+        redeemCollateral(_token, _collateralAmount);
     }
 
     ///////////////////////////
