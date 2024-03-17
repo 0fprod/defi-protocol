@@ -57,6 +57,7 @@ contract DSCEngine is ReentrancyGuard {
     /////////////////////
     mapping(address user => mapping(address token => uint256 amount)) private s_usersCollateral;
     mapping(address user => uint256 amount) private s_usersDSC;
+    mapping(address token => address priceFeed) private s_priceFeeds;
 
     ////////////////
     // Events     //
@@ -70,6 +71,8 @@ contract DSCEngine is ReentrancyGuard {
         i_wBTC = _collateralTokens[1];
         i_wETHPriceFeed = _priceFeeds[0];
         i_wBTCPriceFeed = _priceFeeds[1];
+        s_priceFeeds[i_wETH] = i_wETHPriceFeed;
+        s_priceFeeds[i_wBTC] = i_wBTCPriceFeed;
     }
 
     ////////////////
@@ -268,5 +271,22 @@ contract DSCEngine is ReentrancyGuard {
         uint256 priceWithPrecision = uint256(price) * ADDITIONAL_FEED_PRECISION;
         uint256 usdValue = (priceWithPrecision * _amount) / PRECISION;
         return usdValue;
+    }
+
+    function getMaxMintableDsc(address _token, uint256 _amount) public view returns (uint256) {
+        uint256 currentCollateralInUsd = getCollateralUSDValue(msg.sender);
+        uint256 collateralValueInUsd = getUSDValue(s_priceFeeds[_token], _amount);
+        uint totalCollateralInUsd = currentCollateralInUsd + collateralValueInUsd;
+        uint256 maxMintableDsc = totalCollateralInUsd / 2;
+        
+        if (maxMintableDsc < 0 || maxMintableDsc < s_usersDSC[msg.sender]) {
+            return 0;
+        }
+
+        if (s_usersDSC[msg.sender] > 0){
+            maxMintableDsc -= s_usersDSC[msg.sender];
+        }
+
+        return maxMintableDsc;
     }
 }

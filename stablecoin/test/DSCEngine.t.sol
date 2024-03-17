@@ -10,16 +10,16 @@ import {AggregatorV3Mock} from "./mocks/AggregatorV3Mock.t.sol";
 import {DSCoin} from "../src/DSCoin.sol";
 
 contract DSCEngineTest is StdCheats, Test {
-    event CollateralDeposited(address indexed user, address indexed token, uint amount);
+    event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
 
+    AggregatorV3Mock wBTCPriceFeed = new AggregatorV3Mock(8, "wBTCPriceFeed");
+    AggregatorV3Mock wETHPriceFeed = new AggregatorV3Mock(8, "wETHPriceFeed");
     DSCoin dsc;
     DSCEngine engine;
     ERC20Mock wETHMock = new ERC20Mock();
     ERC20Mock wBTCMock = new ERC20Mock();
     address wETHaddress = address(wETHMock);
     address wBTCaddress = address(wBTCMock);
-    AggregatorV3Mock wETHPriceFeed = new AggregatorV3Mock(8, "wETHPriceFeed");
-    AggregatorV3Mock wBTCPriceFeed = new AggregatorV3Mock(8, "wBTCPriceFeed");
     address owner = makeAddr("owner");
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
@@ -27,14 +27,14 @@ contract DSCEngineTest is StdCheats, Test {
     bool shouldVerifySecondIndexedParameter = true;
     bool shouldVerifyThirdIndexedParameter = true;
     bool shouldVerifyData = true;
-    uint aHundredEther = 100 ether;
-    uint constant PRICE_FEED_DECIMALS = 10e8;
+    uint256 aHundredEther = 100 ether;
+    uint256 constant PRICE_FEED_DECIMALS = 10e8;
 
     function setUp() public {
         address[] memory collateralTokens = new address[](2);
         collateralTokens[0] = wETHaddress;
         collateralTokens[1] = wBTCaddress;
-        
+
         address[] memory priceFeeds = new address[](2);
         priceFeeds[0] = address(wETHPriceFeed);
         priceFeeds[1] = address(wBTCPriceFeed);
@@ -94,7 +94,7 @@ contract DSCEngineTest is StdCheats, Test {
 
     function test_RevertsWhen_MintingZeroDSC() public {
         vm.startPrank(alice);
-        
+
         vm.expectRevert(DSCEngine.DSCEngine__AmountMustBePositive.selector);
         engine.mintDSC(0);
 
@@ -109,7 +109,7 @@ contract DSCEngineTest is StdCheats, Test {
 
         // Act
         wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
-        uint dscAmount = 1 ether;
+        uint256 dscAmount = 1 ether;
         engine.mintDSC(dscAmount);
 
         // Assert
@@ -122,7 +122,7 @@ contract DSCEngineTest is StdCheats, Test {
         // Arrange
         vm.startPrank(alice);
         wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
-        
+
         vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, 0));
         engine.mintDSC(1 ether);
 
@@ -166,7 +166,7 @@ contract DSCEngineTest is StdCheats, Test {
 
     function test_RevertsWhen_UsersRedeemCollateralIfTheHealthFactorIsNotHealthyEnough() public {
         // Arrange
-        uint expectedHealthFactor = 0.5 ether;
+        uint256 expectedHealthFactor = 0.5 ether;
         vm.startPrank(alice);
         wETHMock.approve(address(engine), 1 ether);
         engine.depositCollateral(wETHaddress, 1 ether);
@@ -174,7 +174,9 @@ contract DSCEngineTest is StdCheats, Test {
         engine.mintDSC(0.5 ether);
 
         // Act
-        vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, expectedHealthFactor));
+        vm.expectRevert(
+            abi.encodeWithSelector(DSCEngine.DSCEngine__InsufficientCollateral.selector, expectedHealthFactor)
+        );
         engine.redeemCollateral(wETHaddress, 0.5 ether);
 
         vm.stopPrank();
@@ -189,23 +191,12 @@ contract DSCEngineTest is StdCheats, Test {
         engine.mintDSC(1 ether);
 
         // Act
-        uint healthFactor = engine.getHealthFactor(alice); 
+        uint256 healthFactor = engine.getHealthFactor(alice);
 
         // Assert
         assertEq(healthFactor, 1 ether);
         vm.stopPrank();
     }
-
-    // The protocol will reward users that liquidate other users when the health factor is below 1
-    // The liquidator will receive the collateral and burn the DSC tokens
-    // They can listen to the mint and burn events to know when to liquidate
-    
-
-    // Lets do an example
-    // Lets say that 100$ of WETH backs 50 DSC tokens. Which means that the price of DSC is 1$.
-    // So each DSC token is backed by 2$ of WETH (our 200% collateralization ratio)
-    // If the price of WETH falls to 1.5$ then the health factor will be 0.75
-    // Which means that the liquidator will receive 1.5$ of WETH and burn 1 DSC token
 
     function test_AllowsBobToLiquidateAlice() public {
         // Arrange
@@ -223,7 +214,7 @@ contract DSCEngineTest is StdCheats, Test {
         engine.mintDSC(10 ether);
 
         // Act
-        uint bobDscToBurn = 1 ether;
+        uint256 bobDscToBurn = 1 ether;
         wETHPriceFeed.updateRoundData(4);
         DSCoin(engine.getStablecoin()).approve(address(engine), 1 ether);
         engine.liquidate(alice, wETHaddress, bobDscToBurn);
@@ -258,5 +249,64 @@ contract DSCEngineTest is StdCheats, Test {
         vm.stopPrank();
     }
 
-    
+    function test_AllowUsersToQueryTheMaximumMintableDsc_WhenTheyHaveNoDeposits() public {
+        // Arrange
+        vm.startPrank(alice);
+        uint256 collateralAmount = 2 ether;
+        wETHPriceFeed.updateRoundData(1);
+
+        // Act
+        uint256 maxMintableDsc = engine.getMaxMintableDsc(wETHaddress, collateralAmount);
+
+        // Assert
+        assertEq(maxMintableDsc, 1 ether);
+        vm.stopPrank();
+    }
+
+    function test_AllowUsersToQueryTheMaximumMintableDsc_WhenTheyHaveCollateral() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wETHaddress, 2 ether);
+        uint256 collateralAmount = 2 ether;
+        wETHPriceFeed.updateRoundData(1);
+
+        // Act
+        uint256 maxMintableDsc = engine.getMaxMintableDsc(wETHaddress, collateralAmount);
+
+        // Assert
+        assertEq(maxMintableDsc, 2 ether);
+        vm.stopPrank();
+    }
+
+    function test_AllowUsersToQueryTheMaximumMintableDsc_WhenTheyHaveCollateralAndDscMinted() public {
+        // Arrange
+        vm.startPrank(alice);
+        wETHMock.approve(address(engine), 2 ether);
+        engine.depositCollateral(wETHaddress, 2 ether);
+        uint256 collateralAmount = 2 ether;
+        wETHPriceFeed.updateRoundData(1);
+        engine.mintDSC(1 ether);
+
+        // Act
+        uint256 maxMintableDsc = engine.getMaxMintableDsc(wETHaddress, collateralAmount);
+
+        // Assert
+        assertEq(maxMintableDsc, 1 ether);
+        vm.stopPrank();
+    }
+
+    function test_AllowUsersToQueryTheMaximumMintableDsc_WhenTheirCollateralIs0Usd() public {
+        // Arrange
+        vm.startPrank(alice);
+        uint256 collateralAmount = 2 ether;
+        wETHPriceFeed.updateRoundData(0);
+
+        // Act
+        uint256 maxMintableDsc = engine.getMaxMintableDsc(wETHaddress, collateralAmount);
+
+        // Assert
+        assertEq(maxMintableDsc, 0 ether);
+        vm.stopPrank();
+    }
 }
