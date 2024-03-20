@@ -19,12 +19,17 @@ contract AggregatorV3Mock is AggregatorV3Interface {
 
     mapping(uint256 index => Round round) rounds;
 
-    constructor(uint8 _decimals, string memory _description) {
+    constructor(uint8 _decimals, string memory _description, int initialPrice) {
         i_decimals = _decimals;
         i_description = _description;
+        _updateRoundData(initialPrice);
     }
 
     function updateRoundData(int256 _answer) external {
+        _updateRoundData(_answer);
+    }
+
+    function _updateRoundData(int256 _answer) internal {
         latestRoundId++;
         uint256 decimalsMultiplier = 10 ** uint256(i_decimals);
         _answer = _answer * int256(decimalsMultiplier);

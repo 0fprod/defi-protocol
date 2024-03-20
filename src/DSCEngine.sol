@@ -304,9 +304,12 @@ contract DSCEngine is ReentrancyGuard {
         if (_amount == 0 || price == 0) {
             return 0;
         }
-
+        console2.log("We're about to revert with Arithmetic over/underflow");
         uint256 priceWithPrecision = uint256(price) * ADDITIONAL_FEED_PRECISION;
+        console.log("### ~ priceWithPrecision:", priceWithPrecision);
+        console.log("### ~ _amount:", _amount);
         uint256 usdValue = (priceWithPrecision * _amount) / PRECISION;
+        console.log("### ~ usdValue:", usdValue);
         return usdValue;
     }
 

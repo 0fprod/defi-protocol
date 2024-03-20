@@ -1,3 +1,4 @@
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 [profile.default]
 src = "src"
 out = "out"
@@ -5,6 +6,10 @@ libs = ["lib"]
 remappings = [
   "@openzeppelin/contracts=lib/openzeppelin-contracts/contracts",
   "@openzeppelin/mocks=lib/openzeppelin-contracts/contracts/mocks",
-  "@chainlink/contracts=lib/chainlink-brownie-contracts/contracts/src/v0.8",]
+  "@chainlink/contracts=lib/chainlink-brownie-contracts/contracts/src/v0.8",
+]
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[invariant]
+runs = 64
+depth = 64
+fail_on_revert = false # By setting it to false, the test runner tolerates transaction reverts without causing the entire test run to fail.

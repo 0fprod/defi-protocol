@@ -12,9 +12,12 @@ contract ConfigHelper is Script {
         address wBTCPriceFeedAddress;
         address wETHPriceFeedAddress;
     }
+
     bool isDevelopment = true;
     uint16 constant ANVIL_CHAINID = 31337;
     uint8 constant PRICE_FEED_DECIMALS = 8;
+    int constant wETHPrice = 2000;
+    int constant wBTCPrice = 40000;
 
     constructor() {
         if (block.chainid == ANVIL_CHAINID) {
@@ -39,8 +42,8 @@ contract ConfigHelper is Script {
     }
     
     function _assignDevelopmentTokensAndPriceFeeds(Configuration memory config) internal  {
-        AggregatorV3Mock wBTCPriceFeed = new AggregatorV3Mock(PRICE_FEED_DECIMALS, "wBTCPriceFeed");
-        AggregatorV3Mock wETHPriceFeed = new AggregatorV3Mock(PRICE_FEED_DECIMALS, "wETHPriceFeed");
+        AggregatorV3Mock wBTCPriceFeed = new AggregatorV3Mock(PRICE_FEED_DECIMALS, "wBTCPriceFeed", wBTCPrice);
+        AggregatorV3Mock wETHPriceFeed = new AggregatorV3Mock(PRICE_FEED_DECIMALS, "wETHPriceFeed", wETHPrice);
         ERC20Mock wETHMock = new ERC20Mock();
         ERC20Mock wBTCMock = new ERC20Mock();
 
