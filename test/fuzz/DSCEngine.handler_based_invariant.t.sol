@@ -30,9 +30,12 @@ contract DSCEngineInvariants is StdInvariant, Test {
       priceFeeds[1] = config.wBTCPriceFeedAddress;
       wETH = config.wETHaddress;
       wBTC = config.wBTCaddress;
-      
+     
+      vm.prank(owner);
       dsc = new DSCoin(owner);
       engine = new DSCEngine(tokens, priceFeeds, address(dsc));
+      vm.prank(owner);
+      dsc.transferOwnership(address(engine));
       handler = new DSCProtocolHandler(address(dsc), address(engine), config, alice);
       targetContract(address(handler));
     }
@@ -47,10 +50,15 @@ contract DSCEngineInvariants is StdInvariant, Test {
 
       assert(wETHValue + wBTCValue >= totalSupply);
     }
-}
 
-// Apodos para
-// Victor -> 
-// Lucas
-// Luciano
-// Nicolas
+    function invariant_gettersShouldNeverRevert() public view {
+      engine.getAccountInformation();
+      engine.getCollateral(wETH, wBTC);
+      engine.getCollateralDeposit(wETH);
+      engine.getCollateralUSDValue(wETH);
+      engine.getHealthFactor(wETH);
+      engine.getMaxMintableDsc(wETH, 1);
+      engine.getStablecoin();
+      engine.getUSDValue(config.wETHPriceFeedAddress, 1);
+    }
+}

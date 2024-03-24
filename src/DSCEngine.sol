@@ -5,7 +5,6 @@ import {DSCoin} from "./DSCoin.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
-import {console, console2} from "forge-std/Test.sol";
 
 /**
  * @title DSCEngine
@@ -185,7 +184,10 @@ contract DSCEngine is ReentrancyGuard {
      * @param _collateral The address of the collateral token.
      * @param _amount The amount of collateral to redeem.
      */
-    function redeemCollateral(address _collateral, uint _amount) public {
+    function redeemCollateral(address _collateral, uint _amount) public validToken(_collateral) positiveAmount(_amount) {
+        if (s_usersCollateral[msg.sender][_collateral] < _amount) {
+            revert DSCEngine__InsufficientCollateral(_amount);
+        }
         s_usersCollateral[msg.sender][_collateral] -= _amount;
         bool s = IERC20(_collateral).transfer(msg.sender, _amount);
         if (!s) {
@@ -304,17 +306,13 @@ contract DSCEngine is ReentrancyGuard {
         if (_amount == 0 || price == 0) {
             return 0;
         }
-        console2.log("We're about to revert with Arithmetic over/underflow");
         uint256 priceWithPrecision = uint256(price) * ADDITIONAL_FEED_PRECISION;
-        console.log("### ~ priceWithPrecision:", priceWithPrecision);
-        console.log("### ~ _amount:", _amount);
         uint256 usdValue = (priceWithPrecision * _amount) / PRECISION;
-        console.log("### ~ usdValue:", usdValue);
         return usdValue;
     }
 
     /**
-     * @dev Returns the maximum amount of DSC that can be minted by the caller.
+     * @dev Returns the maximum amount of DSC that can be minted by the caller if they deposited _amount of _token.
      * @param _token The address of the token used as collateral.
      * @param _amount The amount of collateral token.
      * @return The maximum amount of DSC that can be minted.
@@ -334,5 +332,20 @@ contract DSCEngine is ReentrancyGuard {
         }
 
         return maxMintableDsc;
+    }
+
+    function getCollateralDeposit(address _token) validToken(_token) public view returns (uint) {
+        return s_usersCollateral[msg.sender][_token];
+    }
+
+    /**
+     * @dev Retrieves the account information for a the caller.
+     * @return totalUsdMinted The total amount of USD minted by the user.
+     * @return totalCollateralInUsd The total collateral value in USD for the user.
+     */
+    function getAccountInformation() public view returns (uint256, uint256) {
+        uint256 totalUsdMinted = s_usersDSC[msg.sender];
+        uint256 totalCollateralInUsd = getCollateralUSDValue(msg.sender);
+        return (totalUsdMinted, totalCollateralInUsd);
     }
 }
