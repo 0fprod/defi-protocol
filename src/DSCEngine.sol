@@ -4,7 +4,8 @@ pragma solidity ^0.8.20;
 import {DSCoin} from "./DSCoin.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV3Interface.sol";
+import { OracleLib, AggregatorV3Interface } from "./lib/OracleLib.sol";
+
 
 /**
  * @title DSCEngine
@@ -27,6 +28,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/interfaces/AggregatorV
  */
 
 contract DSCEngine is ReentrancyGuard {
+    using OracleLib for AggregatorV3Interface;
     ////////////////
     // Errors     //
     ////////////////
