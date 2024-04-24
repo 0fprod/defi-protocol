@@ -65,4 +65,44 @@ contract DSCoinTest is StdCheats, Test {
         dsc.burn(101);
         vm.stopPrank();
     }
+
+    function test_ShouldIncreaseTotalHoldersWhenMintingToNewAddress() public {
+        address holder = makeAddr("holder");
+        vm.startPrank(owner);
+        dsc.mint(holder, 100);
+        dsc.mint(owner, 100);
+        vm.stopPrank();
+        assertEq(dsc.totalHolders(), 2);
+    }
+
+    function test_ShouldDecreaseTotalHoldersWhenBurningToZeroBalance() public {
+        vm.startPrank(owner);
+        dsc.mint(owner, 100);
+        dsc.burn(100);
+        vm.stopPrank();
+        assertEq(dsc.totalHolders(), 0);
+    }
+
+    function test_ShouldNotDecreaseTotalHoldersWhenBurningToNonZeroBalance() public {
+        vm.startPrank(owner);
+        dsc.mint(owner, 100);
+        dsc.burn(99);
+        vm.stopPrank();
+        assertEq(dsc.totalHolders(), 1);
+    }
+
+    function test_ShouldIncreaseCirculatingSupplyWhenMinting() public {
+        vm.startPrank(owner);
+        dsc.mint(owner, 100);
+        vm.stopPrank();
+        assertEq(dsc.circulatingSupply(), 100);
+    }
+
+    function test_ShouldDecreaseCirculatingSupplyWhenBurning() public {
+        vm.startPrank(owner);
+        dsc.mint(owner, 100);
+        dsc.burn(100);
+        vm.stopPrank();
+        assertEq(dsc.circulatingSupply(), 0);
+    }
 }

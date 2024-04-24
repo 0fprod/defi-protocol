@@ -21,12 +21,19 @@ contract DSCoin is ERC20, ERC20Burnable, Ownable {
     error DSCoin__CantMintToZeroAddress();
     error DSCoin__BurnAmountExceedsBalance();
 
+    uint256 public circulatingSupply;
+    uint256 public totalHolders;
+
     constructor(address owner) ERC20("DSCoin", "DSC") Ownable(owner) {}
 
-    function mint(address to, uint256 amount) virtual external onlyOwner returns (bool) {
+    function mint(address to, uint256 amount) external virtual onlyOwner returns (bool) {
         if (amount <= 0) revert DSCoin__AmountMustBePositive();
         if (to == address(0)) revert DSCoin__CantMintToZeroAddress();
+        if (balanceOf(to) == 0) {
+            totalHolders += 1;
+        }
         _mint(to, amount);
+        circulatingSupply += amount;
         return true;
     }
 
@@ -36,5 +43,9 @@ contract DSCoin is ERC20, ERC20Burnable, Ownable {
             revert DSCoin__BurnAmountExceedsBalance();
         }
         _burn(msg.sender, amount);
+        circulatingSupply -= amount;
+        if (balanceOf(msg.sender) == 0) {
+            totalHolders -= 1;
+        }
     }
 }
