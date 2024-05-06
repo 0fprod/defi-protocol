@@ -19,7 +19,7 @@ contract AggregatorV3Mock is AggregatorV3Interface {
 
     mapping(uint256 index => Round round) rounds;
 
-    constructor(uint8 _decimals, string memory _description, int initialPrice) {
+    constructor(uint8 _decimals, string memory _description, int256 initialPrice) {
         i_decimals = _decimals;
         i_description = _description;
         _updateRoundData(initialPrice);
@@ -72,5 +72,9 @@ contract AggregatorV3Mock is AggregatorV3Interface {
     {
         Round memory round = rounds[latestRoundId];
         return (round.id, round.answer, round.startedAt, round.updatedAt, round.answeredInRound);
+    }
+
+    function latestAnswer() external view returns (int256) {
+        return rounds[latestRoundId].answer;
     }
 }

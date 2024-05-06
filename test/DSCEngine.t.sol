@@ -12,6 +12,10 @@ import {ConfigHelper} from "../script/ConfigHelper.s.sol";
 
 contract DSCEngineTest is StdCheats, Test {
     event CollateralDeposited(address indexed user, address indexed token, uint256 amount);
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event DSCBurned(address indexed user, uint256 amount);
+    event DSCMinted(address indexed user, uint256 amount);
+    event Liquidation(address indexed liquidator, address indexed insolventUser);
 
     ConfigHelper.Configuration config;
     DSCoin dsc;
@@ -31,7 +35,7 @@ contract DSCEngineTest is StdCheats, Test {
     uint256 constant PRICE_FEED_DECIMALS = 10e8;
 
     function setUp() public {
-        ConfigHelper helperConfig = new ConfigHelper(); 
+        ConfigHelper helperConfig = new ConfigHelper();
         config = helperConfig.getTokensAndPriceFeeds();
         address[] memory tokens = new address[](2);
         tokens[0] = config.wETHaddress;
@@ -43,7 +47,7 @@ contract DSCEngineTest is StdCheats, Test {
         wBTCMock = ERC20Mock(config.wBTCaddress);
         wETHPriceFeed = AggregatorV3Mock(config.wETHPriceFeedAddress);
         wBTCPriceFeed = AggregatorV3Mock(config.wBTCPriceFeedAddress);
-        
+
         dsc = new DSCoin(owner);
         engine = new DSCEngine(tokens, priceFeeds, address(dsc));
 
@@ -115,6 +119,13 @@ contract DSCEngineTest is StdCheats, Test {
         // Act
         wETHPriceFeed.updateRoundData(100); // returns 100 * 10e8
         uint256 dscAmount = 1 ether;
+        vm.expectEmit(
+            shouldVerifyFirstIndexedParameter,
+            shouldVerifySecondIndexedParameter,
+            shouldVerifyThirdIndexedParameter,
+            !shouldVerifyData
+        );
+        emit DSCMinted(alice, dscAmount);
         engine.mintDSC(dscAmount);
 
         // Assert
@@ -144,6 +155,15 @@ contract DSCEngineTest is StdCheats, Test {
 
         // Act
         DSCoin(engine.getStablecoin()).approve(address(engine), 1 ether);
+        vm.expectEmit(
+            shouldVerifyFirstIndexedParameter,
+            shouldVerifySecondIndexedParameter,
+            shouldVerifyThirdIndexedParameter,
+            !shouldVerifyData
+        );
+
+        // Act
+        emit DSCBurned(alice, 1 ether);
         engine.burnDSC(1 ether);
 
         // Assert
@@ -213,22 +233,35 @@ contract DSCEngineTest is StdCheats, Test {
         vm.stopPrank();
 
         vm.startPrank(bob);
-        wBTCMock.approve(address(engine), 2 ether);
-        engine.depositCollateral(config.wBTCaddress, 2 ether);
+        wBTCMock.approve(address(engine), 4 ether);
+        engine.depositCollateral(config.wBTCaddress, 4 ether);
         wBTCPriceFeed.updateRoundData(10);
         engine.mintDSC(10 ether);
 
         // Act
         uint256 bobDscToBurn = 1 ether;
         wETHPriceFeed.updateRoundData(4);
-        DSCoin(engine.getStablecoin()).approve(address(engine), 1 ether);
+        vm.expectEmit(
+            shouldVerifyFirstIndexedParameter,
+            shouldVerifySecondIndexedParameter,
+            shouldVerifyThirdIndexedParameter,
+            !shouldVerifyData
+        );
+        emit Liquidation(bob, alice);
         engine.liquidate(alice, config.wETHaddress, bobDscToBurn);
 
         // Assert
+        assertEq(engine.getCollateral(bob, config.wBTCaddress), 4 ether);
         assertEq(engine.getCollateral(bob, config.wETHaddress), 2 ether);
         assertEq(DSCoin(engine.getStablecoin()).balanceOf(bob), 9 ether);
+        assertEq(wETHMock.balanceOf(bob), 0 ether);
         assertEq(engine.getCollateral(alice, config.wETHaddress), 0);
         assertEq(DSCoin(engine.getStablecoin()).balanceOf(alice), 5 ether);
+
+        // bob withdraws the remaining collateral
+        engine.redeemCollateral(config.wETHaddress, 2 ether);
+        assertEq(engine.getCollateral(bob, config.wETHaddress), 0);
+        assertEq(wETHMock.balanceOf(bob), 2 ether);
         vm.stopPrank();
     }
 

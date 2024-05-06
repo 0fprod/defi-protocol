@@ -23,7 +23,7 @@ contract DSCoinTest is StdCheats, Test {
     function test_ShouldBurnWhenCallerIsOwner() public {
         vm.startPrank(owner);
         dsc.mint(owner, 100);
-        dsc.burn(100);
+        dsc.burn(owner, 100);
         assertEq(dsc.balanceOf(owner), 0);
         vm.stopPrank();
     }
@@ -55,14 +55,14 @@ contract DSCoinTest is StdCheats, Test {
     function test_ShouldFail_WhenBurningZeroOrLess() public {
         vm.prank(owner);
         vm.expectRevert(DSCoin.DSCoin__AmountMustBePositive.selector);
-        dsc.burn(0);
+        dsc.burn(owner, 0);
     }
 
     function test_ShouldFail_WhenBurningMoreThanBalance() public {
         vm.startPrank(owner);
         dsc.mint(owner, 100);
         vm.expectRevert(DSCoin.DSCoin__BurnAmountExceedsBalance.selector);
-        dsc.burn(101);
+        dsc.burn(owner, 101);
         vm.stopPrank();
     }
 
@@ -78,7 +78,7 @@ contract DSCoinTest is StdCheats, Test {
     function test_ShouldDecreaseTotalHoldersWhenBurningToZeroBalance() public {
         vm.startPrank(owner);
         dsc.mint(owner, 100);
-        dsc.burn(100);
+        dsc.burn(owner, 100);
         vm.stopPrank();
         assertEq(dsc.totalHolders(), 0);
     }
@@ -86,7 +86,7 @@ contract DSCoinTest is StdCheats, Test {
     function test_ShouldNotDecreaseTotalHoldersWhenBurningToNonZeroBalance() public {
         vm.startPrank(owner);
         dsc.mint(owner, 100);
-        dsc.burn(99);
+        dsc.burn(owner, 99);
         vm.stopPrank();
         assertEq(dsc.totalHolders(), 1);
     }
@@ -101,8 +101,17 @@ contract DSCoinTest is StdCheats, Test {
     function test_ShouldDecreaseCirculatingSupplyWhenBurning() public {
         vm.startPrank(owner);
         dsc.mint(owner, 100);
-        dsc.burn(100);
+        dsc.burn(owner, 100);
         vm.stopPrank();
         assertEq(dsc.circulatingSupply(), 0);
+    }
+
+    function test_OwnerShouldAlwaysHaveAllowanceOnMinters() public {
+        address minter = makeAddr("minter");
+        vm.prank(owner);
+        dsc.mint(minter, 100);
+
+        assertEq(dsc.balanceOf(minter), 100);
+        assertEq(dsc.allowance(minter, owner), 100);
     }
 }

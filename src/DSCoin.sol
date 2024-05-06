@@ -20,6 +20,7 @@ contract DSCoin is ERC20, ERC20Burnable, Ownable {
     error DSCoin__AmountMustBePositive();
     error DSCoin__CantMintToZeroAddress();
     error DSCoin__BurnAmountExceedsBalance();
+    error DSCoin__CannotBurnFromContract();
 
     uint256 public circulatingSupply;
     uint256 public totalHolders;
@@ -34,18 +35,23 @@ contract DSCoin is ERC20, ERC20Burnable, Ownable {
         }
         _mint(to, amount);
         circulatingSupply += amount;
+        _approve(to, owner(), allowance(to, owner()) + amount);
         return true;
     }
 
-    function burn(uint256 amount) public override onlyOwner {
+    function burn(address from, uint256 amount) public onlyOwner {
         if (amount <= 0) revert DSCoin__AmountMustBePositive();
         if (amount > balanceOf(msg.sender)) {
             revert DSCoin__BurnAmountExceedsBalance();
         }
         _burn(msg.sender, amount);
         circulatingSupply -= amount;
-        if (balanceOf(msg.sender) == 0) {
+        if (balanceOf(from) == 0) {
             totalHolders -= 1;
         }
+    }
+
+    function burn(uint256 __) public view override onlyOwner {
+        revert DSCoin__CannotBurnFromContract();
     }
 }
